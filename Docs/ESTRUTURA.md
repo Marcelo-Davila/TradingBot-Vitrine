@@ -1,9 +1,10 @@
 ﻿# Estrutura do projeto
 
 Árvore de pastas e arquivos gerada a partir do repositório de código (privado).
-Mostra a organização do projeto sem expor o conteúdo dos arquivos.
+Mostra a organização do projeto sem expor o conteúdo dos arquivos. Diretórios de
+build/publicação e arquivos locais são omitidos.
 
-Gerado em 20/09/2026 20:26 por `scripts/gerar-estrutura.ps1`.
+Gerado em 17/11/2026 13:05 por `scripts/gerar-estrutura.ps1`.
 
 ```
 TradingBot/
@@ -11,6 +12,7 @@ TradingBot/
 │   ├── src/
 │   │   ├── TradingBot.Api/
 │   │   │   ├── Composicao/
+│   │   │   │   ├── ComposicaoAutenticacao.cs
 │   │   │   │   ├── ComposicaoEndpoints.cs
 │   │   │   │   ├── ComposicaoPersistencia.cs
 │   │   │   │   └── ComposicaoRobo.cs
@@ -46,6 +48,8 @@ TradingBot/
 │   │   │   │   │   └── ServicoLimpezaDecisoes.cs
 │   │   │   │   ├── Notificacao/
 │   │   │   │   │   └── NotificadorConsole.cs
+│   │   │   │   ├── Seguranca/
+│   │   │   │   │   └── UsuarioAtual.cs
 │   │   │   │   └── Serializacao/
 │   │   │   │       └── ConversorDataUtc.cs
 │   │   │   ├── Presentation/
@@ -70,7 +74,8 @@ TradingBot/
 │   │       │   ├── ConfigTendencia.cs
 │   │       │   ├── ConfiguracaoRobo.cs
 │   │       │   ├── ConfiguracaoRoboSanitizador.cs
-│   │       │   └── ValidadorConfiguracao.cs
+│   │       │   ├── ValidadorConfiguracao.cs
+│   │       │   └── ValidadorLimites.cs
 │   │       ├── Data/
 │   │       │   ├── CarteiraSimulada.cs
 │   │       │   ├── ContextoDecisao.cs
@@ -115,6 +120,10 @@ TradingBot/
 │   │       │   ├── EstrategiaMedia.cs
 │   │       │   ├── EstrategiaRsi.cs
 │   │       │   └── EstrategiaTendencia.cs
+│   │       ├── Market/
+│   │       │   ├── DetectorUrlMarketData.cs
+│   │       │   ├── LimitadorTaxaBinance.cs
+│   │       │   └── ServicoDadosMercado.cs
 │   │       ├── Monitoring/
 │   │       │   ├── AssinaturaDecisao.cs
 │   │       │   ├── PlanejadorMonitores.cs
@@ -143,6 +152,7 @@ TradingBot/
 │   │       │   ├── IRepositorioOperacoes.cs
 │   │       │   ├── IRepositorioOrdens.cs
 │   │       │   ├── IRepositorioSinais.cs
+│   │       │   ├── IServicoDadosMercado.cs
 │   │       │   └── IVisao.cs
 │   │       ├── Relatorios/
 │   │       │   ├── CalculadoraDesempenho.cs
@@ -151,8 +161,10 @@ TradingBot/
 │   ├── tests/
 │   │   └── TradingBot.Tests/
 │   │       ├── Fakes/
+│   │       │   ├── BinanceAPIClientFake.cs
 │   │       │   ├── ExecutorFake.cs
 │   │       │   ├── FornecedorConfiguracaoFake.cs
+│   │       │   ├── ProvedorClienteBinanceFake.cs
 │   │       │   ├── RepositorioCarteiraFake.cs
 │   │       │   └── RepositorioOperacoesFake.cs
 │   │       ├── AssinaturaDecisaoTests.cs
@@ -162,29 +174,62 @@ TradingBot/
 │   │       ├── CalculadoraSeriesTests.cs
 │   │       ├── CalculadoraTaxaTests.cs
 │   │       ├── ConfiguracaoRoboTests.cs
+│   │       ├── DetectorUrlMarketDataTests.cs
 │   │       ├── EstrategiaMacdTests.cs
 │   │       ├── EstrategiaMediaTests.cs
 │   │       ├── EstrategiaRsiTests.cs
 │   │       ├── EstrategiaTendenciaTests.cs
 │   │       ├── KlinesDataTests.cs
+│   │       ├── LimitadorTaxaBinanceTests.cs
 │   │       ├── MotorOperacoesTests.cs
-│   │       └── TradingBot.Tests.csproj
+│   │       ├── ServicoDadosMercadoTests.cs
+│   │       ├── TradingBot.Tests.csproj
+│   │       └── ValidadorLimitesTests.cs
 │   └── TradingBot.sln
 ├── docs/
 │   ├── diagramas/
+│   │   ├── multiusuario/
+│   │   │   ├── autenticacao.drawio
+│   │   │   ├── autenticacao.md
+│   │   │   ├── componentes.drawio
+│   │   │   ├── componentes.md
+│   │   │   ├── fluxo-decisao.drawio
+│   │   │   ├── fluxo-decisao.md
+│   │   │   ├── nucleo-decisao.drawio
+│   │   │   ├── nucleo-decisao.md
+│   │   │   ├── README.md
+│   │   │   ├── usuario-configuracao.drawio
+│   │   │   └── usuario-configuracao.md
+│   │   ├── componentes.drawio
+│   │   ├── componentes.md
 │   │   ├── compra.drawio
+│   │   ├── decisao-regras.drawio
+│   │   ├── decisao-regras.md
+│   │   ├── dominio.drawio
+│   │   ├── dominio.md
+│   │   ├── maquina-estados.drawio
+│   │   ├── maquina-estados.md
+│   │   ├── ports.drawio
+│   │   ├── ports.md
+│   │   ├── README.md
 │   │   └── venda.drawio
 │   ├── ARCHITECTURE.md
 │   ├── CONFIG.md
+│   ├── DEPLOY.md
+│   ├── MAPA-CODIGO.html
+│   ├── MAPA-CODIGO.md
 │   ├── PLANO_FILTRO_TENDENCIA.md
+│   ├── PLANO_MULTIUSUARIO.md
 │   ├── PLANO_OPERACOES.md
 │   ├── PLANO_REFATORACAO.md
 │   └── RUNNING.md
 ├── frontend/
 │   ├── public/
-│   │   └── favicon.svg
+│   │   ├── favicon.svg
+│   │   └── silent-check-sso.html
 │   ├── src/
 │   │   ├── components/
+│   │   │   ├── AutenticacaoMenu.tsx
 │   │   │   ├── CardMoeda.tsx
 │   │   │   ├── GraficoMoeda.tsx
 │   │   │   ├── ListaOrdens.tsx
@@ -193,13 +238,16 @@ TradingBot/
 │   │   │   ├── NavegadorDecisoes.tsx
 │   │   │   ├── PaginaConfiguracao.tsx
 │   │   │   ├── PaginaDecisoes.tsx
+│   │   │   ├── PaginaLogin.tsx
 │   │   │   ├── PainelGanhos.tsx
 │   │   │   ├── PainelOperacoes.tsx
 │   │   │   └── Sparkline.tsx
 │   │   ├── hooks/
-│   │   │   └── useEstadoMercado.ts
+│   │   │   ├── useEstadoMercado.ts
+│   │   │   └── useSessao.ts
 │   │   ├── services/
-│   │   │   └── apiEstado.ts
+│   │   │   ├── apiEstado.ts
+│   │   │   └── autenticacao.ts
 │   │   ├── types/
 │   │   │   ├── estado.ts
 │   │   │   └── tradingview.ts
@@ -221,35 +269,41 @@ TradingBot/
 │   ├── tsconfig.node.json
 │   └── vite.config.ts
 ├── tools/
-│   └── backtest/
-│       ├── lib/
-│       │   ├── dados.mjs
-│       │   ├── indicadores.mjs
-│       │   ├── indicadores-robo.mjs
-│       │   └── simulacao.mjs
-│       ├── 4h-capital.mjs
-│       ├── acumulacao-1d.mjs
-│       ├── analise-sem-tendencia.mjs
-│       ├── backtest.mjs
-│       ├── btc-stack.mjs
-│       ├── composto.mjs
-│       ├── cross-sectional.mjs
-│       ├── ema-sweep.mjs
-│       ├── estrategias.mjs
-│       ├── holdout-moeda.mjs
-│       ├── ml.mjs
-│       ├── README.md
-│       ├── robo-5m-1ano.mjs
-│       ├── robo-real.mjs
-│       ├── sweep-velas.mjs
-│       ├── trend-ma-vs-ema.mjs
-│       ├── validar-candidatos.mjs
-│       ├── walkforward.mjs
-│       ├── walkforward-composto.mjs
-│       └── walkforward-real.mjs
+│   ├── backtest/
+│   │   ├── lib/
+│   │   │   ├── dados.mjs
+│   │   │   ├── indicadores.mjs
+│   │   │   ├── indicadores-robo.mjs
+│   │   │   └── simulacao.mjs
+│   │   ├── 4h-capital.mjs
+│   │   ├── acumulacao-1d.mjs
+│   │   ├── analise-sem-tendencia.mjs
+│   │   ├── backtest.mjs
+│   │   ├── btc-stack.mjs
+│   │   ├── composto.mjs
+│   │   ├── cross-sectional.mjs
+│   │   ├── ema-sweep.mjs
+│   │   ├── estrategias.mjs
+│   │   ├── holdout-moeda.mjs
+│   │   ├── ml.mjs
+│   │   ├── README.md
+│   │   ├── robo-5m-1ano.mjs
+│   │   ├── robo-real.mjs
+│   │   ├── sweep-velas.mjs
+│   │   ├── trend-ma-vs-ema.mjs
+│   │   ├── validar-candidatos.mjs
+│   │   ├── walkforward.mjs
+│   │   ├── walkforward-composto.mjs
+│   │   └── walkforward-real.mjs
+│   └── doc/
+│       ├── gerar-mapa.mjs
+│       └── README.md
 ├── .gitignore
 ├── AGENTS.md
+├── gerar-mapa.bat
 ├── iniciar-dev.bat
+├── publicar.bat
+├── publicar.ps1
 ├── README.md
 └── STATUS.md
 ```

@@ -13,10 +13,13 @@ flowchart TB
         PRE[ServicoPreco]
         AVAL[AvaliadorDecisao]
         MOTOR[MotorOperacoes]
+        DADOS[Serviço de dados de mercado]
         PORT[Ports]
         MON --> PORT
         PRE --> PORT
         MOTOR --> PORT
+        MON --> DADOS
+        PRE --> DADOS
         AVAL -.lê.-> MON
     end
     subgraph Api[TradingBot.Api — host]
@@ -25,19 +28,30 @@ flowchart TB
         MEM[MemoriaDeEstadoMercado]
         REP[Repositórios MySQL]
         EXE[ExecutorOrdensSimulado]
+        AUTH[Autenticação OIDC e autorização]
         API[API REST]
         COORD[CoordenadorMonitores]
     end
+    IDP[Provedor de identidade OIDC]
+    EXCHANGE[Binance]
+    DADOS --> BIN
+    BIN --> EXCHANGE
     BIN -.IBinanceAPIClient.-> PORT
     NOT -.INotificador.-> PORT
     MEM -.IEstadoMercado.-> PORT
     REP -.IRepositorio*.-> PORT
     EXE -.IExecutorOrdens.-> PORT
+    IDP --> AUTH
+    DASH[Dashboard React] -->|sessão autenticada| API
+    API --> AUTH
     COORD --> MON
     API --> MEM
     API --> REP
-    DASH[Dashboard React] --> API
 ```
+
+O backend valida a identidade delegada e limita cada consulta/configuração ao
+usuário autenticado. O provedor externo mantém as credenciais de acesso; o
+TradingBot não armazena senhas.
 
 ## Ports (contratos do domínio)
 
@@ -61,6 +75,7 @@ classDiagram
     class IEstrategiaMedia
     class IRegraDecisao
     class IFornecedorConfiguracao
+    class IServicoDadosMercado
 ```
 
 ## Domínio
@@ -78,6 +93,10 @@ classDiagram
     }
     class ServicoPreco {
         +AtualizarAsync()
+    }
+    class ServicoDadosMercado {
+        +ObterCandlesAsync()
+        +ObterPrecoAsync()
     }
     class EstrategiaRsi {
         +Calcular()
@@ -130,6 +149,8 @@ classDiagram
     CoordenadorMonitores --> ServicoMonitoramento : cria/para
     CoordenadorMonitores --> GerenciadorConfiguracaoAtiva : lê
     ServicoMonitoramento --> EstrategiaRsi
+    ServicoMonitoramento --> ServicoDadosMercado : consulta compartilhada
+    ServicoDadosMercado --> IBinanceAPIClient : controla chamadas externas
     ServicoMonitoramento --> EstrategiaMacd
     ServicoMonitoramento --> EstrategiaTendencia
     ServicoMonitoramento --> EstrategiaMedia
@@ -180,4 +201,24 @@ flowchart LR
     AV -->|caso contrário| M[MANTER<br/>com a 1ª pendência]
     C --> J[Justificativa]
     V --> J
+```
+
+## Acesso autenticado
+
+```mermaid
+sequenceDiagram
+    participant U as Usuário
+    participant F as Dashboard
+    participant I as Provedor OIDC
+    participant A as API
+    participant D as Dados
+
+    U->>F: inicia sessão
+    F->>I: autenticação delegada
+    I-->>F: token
+    F->>A: requisição autenticada
+    A->>I: valida token
+    I-->>A: identidade confirmada
+    A->>D: consulta no escopo do usuário
+    D-->>F: resposta autorizada
 ```

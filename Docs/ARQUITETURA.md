@@ -20,14 +20,20 @@ flowchart LR
         IND[Indicadores]
         DEC[Decisão por regras]
         MON[Monitoramento]
+        HUB[Dados de mercado compartilhados]
         OPE[Operações simuladas]
     end
     subgraph Host[TradingBot.Api — host]
         AD[Binance, banco, notificação<br/>adapters]
+        SEC[Autenticação OIDC<br/>e autorização]
         API[API REST]
     end
-    F[Dashboard React] --> API
+    IDP[Provedor de identidade OIDC] --> SEC
+    F[Dashboard React] -->|sessão autenticada| API
+    API --> SEC
     MON --> P
+    MON --> HUB
+    HUB --> P
     P -.implementado por.-> AD
     API --> AD
 ```
@@ -37,6 +43,11 @@ flowchart LR
 - **`TradingBot.Api`** é o host: robô + API num processo só. Implementa os
   contratos (Binance, notificação, estado, banco, console) e faz a composição
   por injeção de dependência.
+- **Acesso multiusuário:** a identidade é validada por um provedor externo
+  compatível com OIDC; a API restringe a configuração e os dados ao usuário
+  autenticado. O sistema não mantém senhas.
+- **Dados de mercado:** os monitores consomem um serviço compartilhado, que
+  centraliza a consulta à Binance e controla a frequência das chamadas.
 - **`frontend/`** é o dashboard React, que consome a API.
 - **`tools/backtest/`** são scripts Node.js usados para análise, fora do
   runtime da aplicação.
@@ -45,6 +56,8 @@ flowchart LR
 |------------|------------------|
 | `TradingBot.Core` | Indicadores, decisão por regras, monitoramento, operações simuladas, configuração e relatórios |
 | `TradingBot.Api` | Composição (DI), adapters de infraestrutura, API REST e apresentação |
+| Acesso | Autenticação delegada OIDC e autorização de dados por usuário |
+| Serviço de dados de mercado | Consultas compartilhadas à Binance e controle de frequência |
 | Dashboard React | Visualização do estado, sinais, decisões, operações e configuração |
 | MySQL | Persistência opcional de sinais, ordens, carteira, decisões e configuração |
 | Binance | Fonte dos candles/ticker (API pública) e das taxas da conta |
@@ -73,6 +86,8 @@ flowchart TB
 - **Decisao** — avaliador, fábrica e as **regras plugáveis** de compra e venda.
 - **Monitoring** — um serviço por série (conta + símbolo + vela), o serviço de
   preço de referência e o planejador de monitores.
+- **Market** — consulta compartilhada de candles e preços, com controle da
+  frequência das chamadas externas.
 - **Operacoes** — motor de operações fictícias, executor simulado e cálculo de
   taxa.
 - **Relatorios** — cálculo de desempenho.
@@ -83,6 +98,10 @@ flowchart TB
 - **`Composicao/`** — extensões de DI: robô, persistência e endpoints.
 - **`Infrastructure/Binance/`** — adapter do cliente Binance, reconfigurável ao
   vivo quando credenciais ou ambiente mudam.
+- **Dados de mercado** — serviço compartilhado para candles e preços, com
+  limitação de chamadas externas.
+- **Autenticação** — validação de tokens OIDC e autorização no servidor; a
+  identidade é externa e os dados de configuração ficam no escopo do usuário.
 - **`Infrastructure/Notificacao/`** — canal de aviso plugável (hoje console).
 - **`Infrastructure/Estado/`** — snapshot de mercado em memória, thread-safe.
 - **`Infrastructure/MySql/`** — conexão, inicializador de banco (DbUp),
@@ -121,6 +140,8 @@ flowchart TB
 | **Null Object / ponto de extensão** | `IExecutorOrdens` com `ExecutorOrdensSimulado` | Hoje simula; a versão real entra como outra implementação, sem mudar o motor |
 | **Custom Hook + polling** | `useEstadoMercado` | Encapsula o ciclo de atualização do dashboard |
 | **Adapter de UI** | `utils/tradingview.ts` | Isola o widget de gráfico do resto dos componentes |
+| **OIDC / Resource Server** | Frontend autenticado + API | Delega a identidade a um provedor externo e valida o token no servidor |
+| **Hub de dados / rate limiting** | Serviço de dados de mercado | Reutiliza consultas de mercado e controla a frequência de chamadas à Binance |
 
 ### Princípios
 
@@ -150,6 +171,8 @@ flowchart TB
 | 10 | **Persistência opcional** | A API roda em memória sem banco, o que simplifica o desenvolvimento |
 | 11 | **Backtests com premissas de trade real** | Taxa, slippage e preenchimento sem look-ahead; caso contrário o resultado é fantasia |
 | 12 | **MySQL com migrations em SQL puro (DbUp)** | Esquema explícito e aplicável no boot do serviço |
+| 13 | **Identidade delegada via OIDC** | O aplicativo não armazena senhas; o backend aplica autorização por usuário |
+| 14 | **Dados de mercado compartilhados** | Reduz chamadas redundantes e centraliza o controle de frequência à Binance |
 
 ## Fluxos
 
@@ -159,15 +182,18 @@ flowchart TB
 sequenceDiagram
     participant C as CoordenadorMonitores
     participant M as ServicoMonitoramento
-    participant B as Adapter Binance
+    participant H as Serviço compartilhado de dados de mercado
+    participant B as Binance
     participant A as Indicadores/Regras
     participant E as Estado em memória
     participant D as MySQL
 
     C->>M: cria 1 monitor por série (conta+moeda+vela)
     loop a cada ciclo
-        M->>B: obtém candles (incluindo a vela em formação)
-        B-->>M: klines
+        M->>H: solicita candles da série
+        H->>B: consulta dados (com limite de frequência)
+        B-->>H: klines
+        H-->>M: candles compartilhados
         M->>A: calcula RSI, MACD e tendência
         M->>A: avalia as regras dos lados permitidos
         A-->>M: COMPRAR / VENDER / MANTER + justificativa
@@ -216,6 +242,26 @@ sequenceDiagram
     C->>C: cria, recria ou para monitores
 ```
 
+### Autenticação e escopo por usuário
+
+```mermaid
+sequenceDiagram
+    participant U as Usuário
+    participant F as Dashboard
+    participant I as Provedor OIDC
+    participant A as API
+    participant D as Dados/configuração
+
+    U->>F: inicia sessão
+    F->>I: autenticação delegada
+    I-->>F: token de acesso
+    F->>A: requisição autenticada
+    A->>I: valida emissor, assinatura e validade
+    I-->>A: identidade validada
+    A->>D: consulta somente dados autorizados do usuário
+    D-->>F: resposta dentro do escopo permitido
+```
+
 ## Ambientes
 
 | Ambiente | Característica |
@@ -237,7 +283,8 @@ locais ou variáveis de ambiente. Somente os nomes das seções são documentado
 | `ConnectionStrings:MySql` | Persistência opcional; sem ela, a API roda em memória |
 | `Contas[]` | Contas Binance (chaves, ambiente, moedas, velas e estratégias) |
 | `Analise:RetencaoDias` | Retenção do histórico de decisões |
-| `ApiSeguranca:Token` | Exige header de API key nos endpoints quando preenchido |
+| `Autenticacao` | Integração com o provedor externo OIDC; valores de ambiente não são publicados |
+| `ApiSeguranca:Token` | Token opcional para integrações de serviço |
 | `ASPNETCORE_ENVIRONMENT` | Seleciona o conjunto de configuração por ambiente |
 
 A API devolve a configuração com **segredos mascarados**, e a gravação passa por
@@ -249,8 +296,10 @@ validação antes de ser aplicada.
   segredos são ignorados pelo Git; em produção, entram por ambiente.
 - **Sem transações reais**: a execução de ordens é simulada; o contrato real
   existe, mas não é chamado.
-- **Superfície reduzida**: o dashboard é exposto por um proxy; a API pode exigir
-  token próprio.
+- **Identidade e autorização**: autenticação é delegada via OIDC; o backend
+  valida o token e deriva do usuário autenticado o escopo dos dados acessíveis.
+- **Superfície reduzida**: o dashboard é exposto por um proxy; integrações de
+  serviço podem usar um token próprio.
 - **Domínio isolado**: a regra de negócio não tem acesso direto a rede nem a
   banco, só aos contratos.
 - O repositório público **não contém** código-fonte, parâmetros de estratégia,

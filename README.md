@@ -13,6 +13,12 @@ taxas) para validar a estratégia ao longo do tempo.
 real existe como contrato plugável (`IExecutorOrdens`) e está prevista para uma
 etapa futura, começando pela testnet.
 
+## Demonstração
+
+Acesse o TradingBot em produção: [analisetradingbot.ddns.net](https://analisetradingbot.ddns.net/).
+
+> A demonstração pode não estar disponível em determinados momentos.
+
 ## Objetivo
 
 Construir um robô de estudo que percorre o ciclo completo de uma estratégia
@@ -21,7 +27,8 @@ simulação → medir o resultado**. O foco não é "acertar o mercado", e sim t
 ambiente honesto para avaliar se uma regra se sustenta — inclusive comparando o
 que ela faria em janelas que não foram usadas para ajustá-la.
 
-- Sistemas **long-only no Spot** (não há short na configuração executável).
+- Operação **long-only por padrão no Spot**; modos que permitem short são uma
+  opção de configuração para ambientes compatíveis.
 - Operações **fictícias** (paper trading), com **taxa taker** e premissas
   realistas de preenchimento.
 - Toda a análise é feita sobre **dados públicos** de mercado da Binance.
@@ -69,6 +76,10 @@ revisão e como manter responsabilidade sobre o código final.
   ganho/perda, P&L bruto/taxas/líquido, tempo médio).
 - **Configuração editável pelo dashboard**, validada, persistida e aplicada
   **ao vivo**, sem reiniciar o processo.
+- **Autenticação delegada (OIDC)** e autorização no backend, com dados de
+  configuração isolados por usuário; o projeto não armazena senhas.
+- **Consulta compartilhada de dados de mercado**, com controle de chamadas à
+  Binance para reduzir requisições redundantes entre monitores.
 - **Registro das decisões**: o estado e o resultado de cada regra, gravados
   apenas quando o estado muda, permitindo investigar **por que uma operação não
   aconteceu**.
@@ -102,6 +113,7 @@ flowchart LR
         I[Indicadores]
         D[Decisão por regras]
         M[Monitoramento]
+        H[Dados de mercado compartilhados]
         O[Operações simuladas]
     end
     subgraph Host[TradingBot.Api]
@@ -109,11 +121,14 @@ flowchart LR
         N[Notificação<br/>adapter]
         E[Estado em memória<br/>adapter]
         R[Repositórios MySQL<br/>adapter]
+        AUTH[Autenticação e<br/>autorização]
         API[API REST]
     end
-    F[Dashboard React] --> API
+    IDP[Provedor de identidade OIDC] --> AUTH
+    F[Dashboard React] -->|sessão autenticada| API
+    API --> AUTH
     API --> E
-    M --> P
+    M --> H --> P
     P --> A
     P --> N
     P --> E
@@ -134,8 +149,8 @@ A lógica é de **reversão com confirmação de momentum**:
   (conta + moeda + timeframe).
 
 O robô é uma **máquina de estados**: fica parado até o primeiro sinal válido e,
-a partir daí, o sinal oposto fecha a posição — invertendo apenas se o short
-estiver habilitado (por padrão, não está: é Spot, long-only).
+a partir daí, o sinal oposto fecha a posição. A abertura de posição short depende
+de configuração explícita e de um ambiente de negociação compatível.
 
 **Backtests (resultado qualitativo).** Os scripts em `tools/backtest/` usam
 premissas de trade real (taxa taker, slippage, preenchimento no preço do sinal,
@@ -160,11 +175,12 @@ amostra — o que reforça o valor da validação walk-forward.
 | GET    | `/api/acumulacao`        | Série do modo acumulação                                          |
 | GET    | `/api/decisoes`          | Histórico de decisões (estado + resultado de cada regra)          |
 | GET    | `/api/decisoes.csv`      | Exportação do histórico de decisões em CSV                        |
-| GET    | `/api/config`            | Configuração efetiva (segredos mascarados)                        |
-| PUT    | `/api/config`            | Valida, persiste e aplica a configuração ao vivo                  |
+| GET    | `/api/config`            | Configuração efetiva do usuário autenticado (segredos mascarados) |
+| PUT    | `/api/config`            | Valida e aplica a configuração do usuário autenticado             |
 
-Opcionalmente, os endpoints podem exigir um header de API key
-(`ApiSeguranca:Token`), pensado para expor o dashboard sem deixar a API aberta.
+Os endpoints do dashboard exigem uma sessão autenticada por OIDC. A API valida
+a identidade e restringe os dados ao usuário autenticado; integrações de serviço
+podem usar autenticação própria.
 
 ## Estrutura
 
@@ -200,6 +216,10 @@ estado em memória — sem ordens fictícias.
 - [Arquitetura, padrões de projeto e decisões](Docs/ARQUITETURA.md)
 - [UML](Docs/UML.md)
 - [Estrutura de pastas](Docs/ESTRUTURA.md)
+
+Esta vitrine documenta a arquitetura e a organização do projeto. Ela não contém
+o código-fonte da aplicação nem credenciais, parâmetros operacionais ou dados
+de infraestrutura.
 
 ## Avisos
 
